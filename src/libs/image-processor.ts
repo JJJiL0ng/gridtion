@@ -5,21 +5,45 @@ export const processImage = async (imageFile: File, gridType: '3x1' | '3x2' | '3
     // 그리드 설정
     const rows = gridType === '3x1' ? 1 : gridType === '3x2' ? 2 : 3;
     const cols = 3;
-    const overlapPixels = 8;  // 좌우 중복 픽셀 수
+    const overlapPixels = 16;  // 좌우 중복 픽셀 수
     
     // 분할된 이미지를 저장할 배열
     const gridImages: Blob[] = [];
     
-    // 원본 이미지 비율을 유지하면서 조정
-    const canvasWidth = image.width;
-    const canvasHeight = image.height;
+    // 원본 이미지 비율 조정 (4:3 비율로 크롭)
+    let canvasWidth = image.width;
+    let canvasHeight = image.height;
+    const targetRatio = 4 / 3; // 인스타그램 표준 4:3 비율
+    
+    // 이미지 비율에 따라 크롭할 영역 계산
+    let sourceX = 0;
+    let sourceY = 0;
+    let sourceWidth = canvasWidth;
+    let sourceHeight = canvasHeight;
+    
+    const currentRatio = canvasWidth / canvasHeight;
+    
+    if (currentRatio > targetRatio) {
+      // 이미지가 더 넓은 경우, 좌우를 크롭
+      sourceWidth = canvasHeight * targetRatio;
+      sourceX = (canvasWidth - sourceWidth) / 2;
+    } else if (currentRatio < targetRatio) {
+      // 이미지가 더 높은 경우, 상하를 크롭
+      sourceHeight = canvasWidth / targetRatio;
+      sourceY = (canvasHeight - sourceHeight) / 2;
+    }
+    
+    // 실제 사용할 캔버스 크기
+    canvasWidth = sourceWidth;
+    canvasHeight = sourceHeight;
     
     // 각 그리드 요소의 크기 계산 (중복 영역 없이)
     const gridWidth = canvasWidth / cols;
     const gridHeight = canvasHeight / rows;
     
     // 디버깅
-    console.log(`원본 이미지 크기: ${canvasWidth}x${canvasHeight}`);
+    console.log(`원본 이미지 크기: ${image.width}x${image.height}`);
+    console.log(`크롭된 이미지 크기: ${canvasWidth}x${canvasHeight}`);
     console.log(`그리드 크기 (중복 제외): ${gridWidth}x${gridHeight}`);
     
     // 각 그리드 아이템 생성
@@ -32,59 +56,49 @@ export const processImage = async (imageFile: File, gridType: '3x1' | '3x2' | '3
           throw new Error('Canvas 컨텍스트를 생성할 수 없습니다.');
         }
         
-        // 이 그리드 셀이 좌측 가장자리에 있는지
-        const isLeftEdge = col === 0;
-        // 이 그리드 셀이 우측 가장자리에 있는지
-        const isRightEdge = col === cols - 1;
-        
-        // 캔버스 폭 계산 (중복 영역 포함)
-        let cellWidth = gridWidth;
-        // 왼쪽에 중복 영역이 필요하면 추가
-        if (!isLeftEdge) {
-          cellWidth += overlapPixels;
-        }
-        // 오른쪽에 중복 영역이 필요하면 추가
-        if (!isRightEdge) {
-          cellWidth += overlapPixels;
-        }
-        
-        // 캔버스 크기 설정
-        canvas.width = cellWidth;
+        // 모든 셀에 좌우로 각각 16픽셀 추가
+        canvas.width = gridWidth + (2 * overlapPixels); // 좌우 모두 추가
         canvas.height = gridHeight;
         
-        // 원본 이미지에서 잘라낼 영역의 시작점
-        let sourceX = col * gridWidth;
-        // 왼쪽에 중복 영역이 필요한 경우 (첫번째 열이 아닌 경우)
-        if (!isLeftEdge) {
-          sourceX -= overlapPixels;
+        // 원본 이미지에서 시작점 계산 
+        // (왼쪽 16픽셀 앞에서 시작하되, 이미지 경계를 벗어나지 않도록)
+        const cellX = sourceX + (col * gridWidth) - overlapPixels;
+        const cellY = sourceY + (row * gridHeight);
+        
+        // 실제 그릴 너비 계산 (왼쪽이나 오른쪽이 이미지 밖으로 나갔을 경우 처리)
+        let drawX = 0;
+        let srcX = cellX;
+        let srcWidth = canvas.width;
+        
+        // 왼쪽이 이미지 밖으로 나갔을 경우
+        if (cellX < sourceX) {
+          drawX = sourceX - cellX; // 캔버스에서 그리기 시작할 X 위치 조정
+          srcX = sourceX; // 원본에서 가져올 X 위치 조정
+          srcWidth = canvas.width - drawX; // 원본에서 가져올 너비 조정
         }
         
-        const sourceY = row * gridHeight;
+        // 오른쪽이 이미지 밖으로 나갔을 경우
+        const rightEdge = cellX + canvas.width;
+        if (rightEdge > sourceX + sourceWidth) {
+          srcWidth = (sourceX + sourceWidth) - srcX; // 원본에서 가져올 너비 조정
+        }
         
-        // 원본 이미지에서 잘라낼 영역의 폭
-        const sourceWidth = cellWidth;
+        // 배경을 흰색으로 채우기 (투명하면 인스타에서 검은색으로 보일 수 있음)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         // 이미지 그리기
         ctx.drawImage(
           image,
-          sourceX, sourceY, sourceWidth, gridHeight,
-          0, 0, canvas.width, canvas.height
+          srcX, cellY, srcWidth, gridHeight,
+          drawX, 0, srcWidth, gridHeight
         );
         
-        // 디버깅용 테두리 (개발 중에 확인용으로만 사용)
-        // ctx.strokeStyle = 'red';
-        // ctx.lineWidth = 2;
-        // ctx.strokeRect(0, 0, canvas.width, canvas.height);
-        
         // 디버깅용 - 중복 영역 표시 (개발 중에 확인용으로만 사용)
-        // if (!isLeftEdge) {
-        //   ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-        //   ctx.fillRect(0, 0, overlapPixels, canvas.height);
-        // }
-        // if (!isRightEdge) {
-        //   ctx.fillStyle = 'rgba(0, 0, 255, 0.3)';
-        //   ctx.fillRect(canvas.width - overlapPixels, 0, overlapPixels, canvas.height);
-        // }
+        // ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+        // ctx.fillRect(0, 0, overlapPixels, canvas.height);
+        // ctx.fillStyle = 'rgba(0, 0, 255, 0.3)';
+        // ctx.fillRect(canvas.width - overlapPixels, 0, overlapPixels, canvas.height);
         
         // PNG로 변환 (투명도 유지)
         const blob = await new Promise<Blob>((resolve, reject) => {
@@ -124,7 +138,7 @@ export const processImage = async (imageFile: File, gridType: '3x1' | '3x2' | '3
     return `${row}행 ${col}열 (${index + 1}번째 업로드)`;
   };
   
-  // 프리뷰용 그리드 레이아웃 생성 함수
+  // 프리뷰용 그리드 레이아웃 생성 함수 - 실제 인스타그램에서 보이는 상태로 프리뷰
   export const createGridPreview = (
     gridImages: Blob[], 
     gridType: '3x1' | '3x2' | '3x3'
@@ -146,26 +160,13 @@ export const processImage = async (imageFile: File, gridType: '3x1' | '3x2' | '3
           images.push(img);
         }
         
-        // 전체 캔버스 크기 계산
-        // 첫 번째 행의 이미지들로부터 전체 폭 계산
-        let totalWidth = 0;
-        for (let col = 0; col < cols; col++) {
-          const img = images[col];
-          // 첫 번째 열이면 전체 폭
-          if (col === 0) {
-            totalWidth += img.width;
-          } 
-          // 중간 열들은 중복 영역을 제외한 폭
-          else {
-            totalWidth += img.width - overlapPixels;
-          }
-        }
+        // 단일 이미지의 실제 표시 크기 (중복 영역 제외)
+        const singleImageWidth = images[0].width - (2 * overlapPixels);
+        const singleImageHeight = images[0].height;
         
-        // 모든 행의 이미지를 합한 높이
-        let totalHeight = 0;
-        for (let row = 0; row < rows; row++) {
-          totalHeight += images[row * cols].height;
-        }
+        // 전체 캔버스 크기 계산
+        const totalWidth = singleImageWidth * cols;
+        const totalHeight = singleImageHeight * rows;
         
         // 프리뷰 캔버스 생성
         const previewCanvas = document.createElement('canvas');
@@ -178,32 +179,19 @@ export const processImage = async (imageFile: File, gridType: '3x1' | '3x2' | '3
         previewCanvas.width = totalWidth;
         previewCanvas.height = totalHeight;
         
-        // 각 이미지 그리기
-        let yOffset = 0;
-        
+        // 각 이미지 그리기 - 중복 영역 제외하고 그리기
         for (let row = 0; row < rows; row++) {
-          let xOffset = 0;
-          
           for (let col = 0; col < cols; col++) {
             const index = row * cols + col;
             const img = images[index];
             
-            if (col === 0) {
-              // 첫 번째 열은 전체 이미지 그리기
-              ctx.drawImage(img, xOffset, yOffset);
-              xOffset += img.width;
-            } else {
-              // 두 번째 열부터는 중복 영역을 제외하고 그리기
-              ctx.drawImage(
-                img, 
-                overlapPixels, 0, img.width - overlapPixels, img.height,
-                xOffset, yOffset, img.width - overlapPixels, img.height
-              );
-              xOffset += img.width - overlapPixels;
-            }
+            // 중복 영역을 제외한 이미지 그리기
+            ctx.drawImage(
+              img,
+              overlapPixels, 0, singleImageWidth, singleImageHeight, // 소스: 좌우 16픽셀 제외
+              col * singleImageWidth, row * singleImageHeight, singleImageWidth, singleImageHeight // 대상: 그리드 위치
+            );
           }
-          
-          yOffset += images[row * cols].height;
         }
         
         // 프리뷰 이미지를 Blob으로 변환

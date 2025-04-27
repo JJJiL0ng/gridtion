@@ -259,14 +259,10 @@ ${Array.from({ length: gridImages.length }).map((_, idx) =>
                       />
                       {showDebugLines && (
                         <div className="absolute inset-0 pointer-events-none">
-                          {/* 중복 영역 표시 - 첫 번째 열이 아니면 왼쪽에 중복 영역 */}
-                          {index % 3 !== 0 && (
-                            <div className="absolute left-0 top-0 bottom-0 w-4 bg-red-500 opacity-30"></div>
-                          )}
-                          {/* 마지막 열이 아니면 오른쪽에 중복 영역 */}
-                          {index % 3 !== 2 && (
-                            <div className="absolute right-0 top-0 bottom-0 w-4 bg-blue-500 opacity-30"></div>
-                          )}
+                          {/* 좌우 모두에 중복 영역 표시 */}
+                          <div className="absolute left-0 top-0 bottom-0 w-4 bg-red-500 opacity-30"></div>
+                          <div className="absolute right-0 top-0 bottom-0 w-4 bg-blue-500 opacity-30"></div>
+                          
                           {/* 그리드 경계 */}
                           <div className="absolute inset-0 border-2 border-yellow-500 opacity-50"></div>
                         </div>
@@ -276,7 +272,7 @@ ${Array.from({ length: gridImages.length }).map((_, idx) =>
                       {getGridPositionLabel(index)}
                       {showDebugLines && (
                         <div className="mt-1 text-xs text-gray-600">
-                          중복 영역: {index % 3 !== 0 ? '왼쪽' : ''} {index % 3 !== 2 ? (index % 3 !== 0 ? '및 ' : '') + '오른쪽' : ''}
+                          중복 영역: 좌우 모두 16픽셀씩
                         </div>
                       )}
                     </div>

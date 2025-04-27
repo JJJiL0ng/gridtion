@@ -5,12 +5,16 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --primary-color: #8a2be2; /* 보라색 */
+  --secondary-color: #9370db; /* 연한 보라색 */
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --primary-color: #9370db; /* 연한 보라색 */
+    --secondary-color: #8a2be2; /* 보라색 */
   }
 }
 
@@ -23,5 +27,17 @@ body {
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+  .bg-primary {
+    background-color: var(--primary-color);
+  }
+  .bg-secondary {
+    background-color: var(--secondary-color);
+  }
+  .text-primary {
+    color: var(--primary-color);
+  }
+  .text-secondary {
+    color: var(--secondary-color);
   }
 }
